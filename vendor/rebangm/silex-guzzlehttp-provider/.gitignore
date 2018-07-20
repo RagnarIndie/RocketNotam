@@ -1,0 +1,5 @@
+vendor/
+composer.phar
+.idea/
+coverage.xml
+composer.lock
