@@ -1,0 +1,142 @@
+{% extends "layout.html.twig" %}
+
+{% block title %}NOTAM Lookup{% endblock %}
+
+{% block content %}
+    <div class="container mdl-grid">
+        <div class="mdl-cell mdl-cell--2-col mdl-cell--hide-tablet mdl-cell--hide-phone"></div>
+        <div class="content mdl-color--white mdl-shadow--4dp content mdl-color-text--grey-800 mdl-cell mdl-cell--8-col">
+        <h3>NOTAM Info</h3>
+        <form action="#">
+            <div class="mdl-grid no-padding">
+                <div class="mdl-cell no-padding no-margin">
+                    <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label icao-input">
+                        <input class="mdl-textfield__input" type="text" pattern="{{ icaoCodePattern }}" id="icao-code-input">
+                        <label class="mdl-textfield__label" for="icao-code">ICAO Code</label>
+                        <span class="mdl-textfield__error">Input is not valid ICAO Code (4 chars)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mdl-grid no-padding">
+                <div class="mdl-cell no-padding no-margin">
+                    <button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored" id="notam-lookup-btn">
+                        Lookup
+                    </button>
+                </div>
+            </div>
+        </form>
+        <div class="progress-bar-container">
+            <div class="row align-center">
+                <div class="mdl-spinner mdl-js-spinner is-active" id="progress-spinner" style="display: none;"></div>
+            </div>
+        </div>
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script>
+        var map;
+
+        function initMap(latValue, lngValue, zoomValue) {
+            if (!latValue) {
+                latValue = 51.684;
+            }
+
+            if (!lngValue) {
+                lngValue = -0.301;
+            }
+
+            if (!zoomValue) {
+                zoomValue = 5;
+            }
+
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: {lat: latValue, lng: lngValue},
+                zoom: zoomValue
+            });
+        }
+
+        function addMapMarker(notamObject) {
+            if (notamObject.lat && notamObject.lon) {
+                var location = new google.maps.LatLng(notamObject.lat, notamObject.lon);
+
+                var marker = new google.maps.Marker({
+                    position: location,
+                    title: notamObject.id
+                });
+
+                var infoWindow = new google.maps.InfoWindow({
+                    content: notamObject.rendered
+                });
+
+                marker.addListener('click', function() {
+                    infoWindow.open(map, marker);
+                });
+
+                initMap(notamObject.lat, notamObject.lon, 11)
+                marker.setMap(map);
+            }
+        }
+
+        $(document).ready(function() {
+            $("button#notam-lookup-btn").on('click', function(e) {
+                var icaoCodeRegexp = new RegExp('{{ icaoCodePattern }}');
+                var icaoCode = $("input#icao-code-input").val();
+
+                if (icaoCode != '' && icaoCode != null && icaoCodeRegexp.test(icaoCode)) {
+                    $.ajax({
+                        type: "POST",
+                        url: "/ajax/notam-lookup",
+                        dataType: "json",
+                        data: {
+                            icao: icaoCode
+                        },
+                        beforeSend: function() {
+                            disableForm();
+                            showLoader();
+                        },
+                        complete: function() {
+                            enableForm();
+                            hideLoader();
+                        },
+                        success: function(response) {
+                            if (response.success && response.notamData) {
+                                var notamSet = JSON.parse(response.notamData);
+
+                                notamSet.forEach(function(element) {
+                                    addMapMarker(element);
+                                });
+                            }
+                        }
+                    });
+                }
+
+                e.preventDefault();
+                return false;
+            });
+        });
+
+        function disableForm() {
+            $("input#icao-code-input").prop('disabled', true);
+            $("button#notam-lookup-btn").prop('disabled', true);
+        }
+
+        function enableForm() {
+            $("input#icao-code-input").prop('disabled', false);
+            $("button#notam-lookup-btn").prop('disabled', false);
+        }
+
+        function showLoader() {
+            $("div#progress-spinner").show();
+        }
+
+        function hideLoader() {
+            $("div#progress-spinner").hide();
+        }
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ app.params.google_maps.api_key }}&callback=initMap" async defer></script>
+{% endblock %}
